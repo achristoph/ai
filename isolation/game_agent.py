@@ -7,6 +7,7 @@ You must test your agent's strength against a set of agents with known
 relative strength using tournament.py and include the results in your report.
 """
 import random
+import itertools
 
 
 class Timeout(Exception):
@@ -36,9 +37,13 @@ def custom_score(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
+    if game.is_loser(player):
+        return float("-inf")
 
-    score = len(game.get_legal_moves())
-    return float(score)
+    if game.is_winner(player):
+        return float("inf")
+
+    return float(len(game.get_legal_moves(player)))
 
 
 class CustomPlayer:
@@ -131,86 +136,78 @@ class CustomPlayer:
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
-            if(self.method == 'minimax'):
-                best_score, best_move = self.minimax(game, self.search_depth)
+            search = None
+            if self.method == 'minimax':
+                search = self.minimax
+            elif self.method == 'alphabeta':
+                search = self.alphabeta
+
+            if self.iterative:
+                for i in itertools.count():
+                    score, move = search(game, i + 1)
             else:
-                best_score, best_move = self.alphabeta(game, self.search_depth)
+                score, move = search(game, self.search_depth)
 
         except Timeout:
-            print('Timeout!')
             # Handle any actions required at timeout, if necessary
-            pass
+            print('Timeout!')
 
         # Return the best move from the last completed search iteration
         return best_move
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
-
         Parameters
         ----------
         game : isolation.Board
             An instance of the Isolation game `Board` class representing the
             current game state
-
         depth : int
             Depth is an integer representing the maximum number of plies to
             search in the game tree before aborting
-
         maximizing_player : bool
             Flag indicating whether the current search depth corresponds to a
             maximizing layer (True) or a minimizing layer (False)
-
         Returns
         -------
         float
             The score for the current search branch
-
         tuple(int, int)
             The best move for the current branch; (-1, -1) for no legal moves
-
         Notes
         -----
             (1) You MUST use the `self.score()` method for board evaluation
                 to pass the project unit tests; you cannot call any other
                 evaluation function directly.
         """
-        moves = game.get_legal_moves()
-        best_score = float("-inf")
-        best_move = moves[0]
-
-        for move in moves:
-            state = game.forecast_move(move)
-            score = self.minimax_value(state, depth - 1, not maximizing_player)
-            if score > best_score:
-                best_move = move
-                best_score = score
-        return (best_score, best_move)
-
-    def minimax_value(self, gamestate, depth, maximizing_player):
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        if gamestate.is_winner(self):
-            return float("inf")
-        if gamestate.is_loser(self):
-            return float("-inf")
+        best_move = None
+        moves = game.get_legal_moves()
+
+        if not moves:
+            return game.utility(self), (-1, -1)
+
         if depth == 0:
-            return self.score(gamestate, self)
+            return self.score(game, self), (-1, -1)
 
-        moves = gamestate.get_legal_moves()
-        best_score = float("-inf")
-
-        for move in moves:
-            gamestate = gamestate.forecast_move(move)
-            score = self.minimax_value(gamestate, depth - 1, False)
-            if maximizing_player:
-                if score > best_score:
-                    best_score = score
-                else:
-                    if score < best_score:
-                        best_score = score
-        return best_score
+        if maximizing_player:
+            max_score = float("-inf")
+            for m in moves:
+                new_game = game.forecast_move(m)
+                score, _ = self.minimax(new_game, depth - 1, False)
+                if score > max_score:
+                    max_score, best_move = score, m
+            return max_score, best_move
+        else:
+            min_score = float("inf")
+            for m in moves:
+                new_game = game.forecast_move(m)
+                score, _ = self.minimax(new_game, depth - 1, True)
+                if score < min_score:
+                    min_score, best_move = score, m
+            return min_score, best_move
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf"), maximizing_player=True):
         """Implement minimax search with alpha-beta pruning as described in the
@@ -253,5 +250,36 @@ class CustomPlayer:
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        best_move = None
+        moves = game.get_legal_moves()
+
+        if not moves:
+            return game.utility(self), (-1, -1)
+
+        if depth == 0:
+            return self.score(game, self), (-1, -1)
+
+        if maximizing_player:
+            max_score = float("-inf")
+            for m in moves:
+                new_game = game.forecast_move(m)
+                score, _ = self.alphabeta(
+                    new_game, depth - 1, alpha, beta, False)
+                if score > max_score:
+                    max_score, best_move = score, m
+                if max_score >= beta:
+                    return max_score, best_move
+                alpha = max(alpha, max_score)
+            return max_score, best_move
+        else:
+            min_score = float("inf")
+            for m in moves:
+                new_game = game.forecast_move(m)
+                score, _ = self.alphabeta(
+                    new_game, depth - 1, alpha, beta, True)
+                if score < min_score:
+                    min_score, best_move = score, m
+                if min_score <= alpha:
+                    return min_score, best_move
+                beta = min(beta, min_score)
+            return min_score, best_move
