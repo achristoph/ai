@@ -144,13 +144,13 @@ class CustomPlayer:
 
             if self.iterative:
                 for i in itertools.count():
-                    score, move = search(game, i + 1)
+                    best_score, best_move = search(game, i + 1)
             else:
-                score, move = search(game, self.search_depth)
+                best_score, best_move = search(game, self.search_depth)
 
         except Timeout:
             # Handle any actions required at timeout, if necessary
-            print('Timeout!')
+            pass
 
         # Return the best move from the last completed search iteration
         return best_move
